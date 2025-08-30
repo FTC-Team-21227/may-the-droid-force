@@ -1,5 +1,8 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.acmerobotics.dashboard.config.Config;
+import com.acmerobotics.dashboard.FtcDashboard;
+import com.acmerobotics.dashboard.telemetry.TelemetryPacket;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
@@ -8,24 +11,30 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.Servo;
 
+import org.firstinspires.ftc.robotcore.external.Telemetry;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.AxesOrder;
 import org.firstinspires.ftc.robotcore.external.navigation.AxesReference;
 import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
 
-@TeleOp(name = "grace teleop 1")
+@Config
+@TeleOp(name = "grace setup tele :)")
 public class TestTeleop082425 extends LinearOpMode {
+    FtcDashboard dashboard = FtcDashboard.getInstance();
+    Telemetry dashTelemetry = dashboard.getTelemetry();
+    TelemetryPacket packet = new TelemetryPacket();
+
     DcMotor backLeftWheel;
     DcMotor backRightWheel;
     DcMotor frontRightWheel;
     DcMotor frontLeftWheel;
 
-    DcMotor lift;
-    DcMotor lift_S1;
-    DcMotor lift_S2;
+    DcMotor lift; // Closest to back, Port 0
+    DcMotor lift_S1; // Middle, Port 1
+    DcMotor lift_S2; // Closest to the front, Port 2
 
-    Servo ext_Left;
-    Servo ext_Right;
+    Servo ext_Left; // In: 0.4, out: 0.7
+    Servo ext_Right; // In: 0.66, out: 0.85
 
     IMU imu;
 
@@ -42,7 +51,8 @@ public class TestTeleop082425 extends LinearOpMode {
 
     int liftTargetPos = 0;
     double liftMotorPower = 1;
-    double target_Ext;
+    public static double leftTargetExt, rightTargetExt;
+    public static float leftExtLow, leftExtHigh, rightExtLow, rightExtHigh;
 
     double motorPowerFL;
     double motorPowerBL;
@@ -51,41 +61,81 @@ public class TestTeleop082425 extends LinearOpMode {
 
     @Override
     public void runOpMode() throws InterruptedException {
+
+        liftMotorPower = 0.5;
+        leftExtLow = 0; leftExtHigh = 1; rightExtLow = 0; rightExtHigh = 1;
+
         initialization();
+
+        // Servo positions
+        ext_Right.scaleRange(rightExtLow, rightExtHigh);
+        ext_Left.scaleRange(leftExtLow, leftExtHigh);
+
+        leftTargetExt = 0;
+        rightTargetExt = 0;
+
+        if (gamepad1.right_trigger > 0.1) {
+            if (gamepad1.triangleWasPressed()) {
+                rightTargetExt += 0.1;
+            }
+            if (gamepad1.crossWasPressed()) {
+                rightTargetExt -= 0.1;
+            }
+        }
+
+        if (gamepad1.left_trigger > 0.1) {
+            if (gamepad1.triangleWasPressed()) {
+                leftTargetExt += 0.1;
+            }
+            if (gamepad1.crossWasPressed()) {
+                leftTargetExt -= 0.1;
+            }
+        }
+
+
         waitForStart();
         while(opModeIsActive()) {
-            calculateIMURotationPower();
-            calculateMotorPower();
-            setMotorPower();
 
-            if (gamepad1.triangle) {
-                lift.setTargetPosition(500);
-                liftMotorPower = lift.getTargetPosition() - lift.getCurrentPosition();
-                lift.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-                lift.setPower(liftMotorPower);
-            }
-            if (gamepad1.cross) {
-                lift.setTargetPosition(0);
-                liftMotorPower = lift.getTargetPosition() - lift.getCurrentPosition();
-                lift.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-                lift.setPower(liftMotorPower);
-            }
-            if (gamepad1.left_bumper) {
-                if (gamepad1.square) {
-                    ext_Left.setPosition(0.4);
-                }
-                if (gamepad1.circle) {
-                    ext_Right.setPosition(0.4);
-                }
-                if(gamepad1.triangle) {
-                    ext_Left.setPosition(0.5);
-                }
-                if(gamepad1.cross) {
-                    ext_Left.setPosition(0.5);
-                }
+//            calculateIMURotationPower();
+//            calculateMotorPower();
+//            setMotorPower();
+
+
+
+            // Stop the lifts
+            if(gamepad1.leftBumperWasPressed() && gamepad1.rightBumperWasPressed()) {
+                lift.setPower(0);
+                lift_S1.setPower(0);
             }
 
-            telemetry.update();
+
+            // Adjust lift motor power using dpad up and down arrows
+            if (gamepad1.dpadUpWasPressed()) {
+                liftMotorPower += 0.1;
+            }
+            if (gamepad1.dpadDownWasPressed()) {
+                liftMotorPower -= 0.1;
+            }
+
+            // Lift motor powers based on gamepad1 right stick
+            lift.setPower(-gamepad1.right_stick_y * liftMotorPower);
+            lift_S1.setPower(-gamepad1.left_stick_y * liftMotorPower);
+
+            ext_Right.setPosition(rightTargetExt);
+            ext_Left.setPosition(leftTargetExt);
+
+            dashTelemetry.addData("left servo target pos", leftTargetExt);
+            dashTelemetry.addData("right servo target pos", rightTargetExt);
+            dashTelemetry.addLine();
+            dashTelemetry.addData("left servo pos", ext_Left.getPosition());
+            dashTelemetry.addData("right servo pos", ext_Right.getPosition());
+            dashTelemetry.addLine();
+            dashTelemetry.addData("lift power factor", liftMotorPower);
+            dashTelemetry.addData("lift pos", lift.getCurrentPosition());
+            dashTelemetry.addData("lift power", lift.getPower());
+            dashTelemetry.addData("lift_1 pos", lift_S1.getCurrentPosition());
+            dashTelemetry.addData("lift_1 power", lift_S1.getPower());
+            dashTelemetry.update();
         }
     }
 
@@ -104,6 +154,11 @@ public class TestTeleop082425 extends LinearOpMode {
         ext_Right = hardwareMap.get(Servo.class, "ext_Right");
         frontLeftWheel.setDirection(DcMotor.Direction.REVERSE);
         backLeftWheel.setDirection(DcMotor.Direction.REVERSE);
+        lift_S1.setDirection(DcMotorSimple.Direction.REVERSE);
+
+        ext_Left.setDirection(Servo.Direction.REVERSE);
+
+
         frontRightWheel.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         frontLeftWheel.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         backLeftWheel.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
